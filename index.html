@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tammana's Kitchen</title>
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Storage polyfill: replaces the Claude-artifact-only window.storage with localStorage -->
+<script>
+  window.storage = {
+    async get(key, shared) {
+      const k = (shared ? "shared:" : "") + key;
+      const v = localStorage.getItem(k);
+      if (v === null) throw new Error("not found");
+      return { key, value: v, shared: !!shared };
+    },
+    async set(key, value, shared) {
+      const k = (shared ? "shared:" : "") + key;
+      localStorage.setItem(k, value);
+      return { key, value, shared: !!shared };
+    },
+    async delete(key, shared) {
+      const k = (shared ? "shared:" : "") + key;
+      localStorage.removeItem(k);
+      return { key, deleted: true, shared: !!shared };
+    },
+    async list(prefix, shared) {
+      const p = (shared ? "shared:" : "") + (prefix || "");
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith(p));
+      return { keys, prefix, shared: !!shared };
+    },
+  };
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
+  }
+}
+</script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel" data-type="module" data-presets="react">
+import { useState, useEffect, useRef } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Plus, Minus, X, ChefHat, Sparkles, Loader2, AlertTriangle, History,
+  Settings2, Check, Star, ShoppingBag, Users, CalendarClock, Camera, Trash2,
+} from "lucide-react";
+
+// ---------- Kitten avatars (pure SVG, no external assets) ----------
+
+function LailaKitten({ purring }) {
+  return (
+    <svg viewBox="0 0 100 100" className={`w-full h-full ${purring ? "laila-purr" : ""}`}>
+      <defs>
+        <linearGradient id="laila-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FFFDF9" />
+          <stop offset="100%" stopColor="#F1E7D4" />
+        </linearGradient>
+      </defs>
+      <path d="M28 32 L20 10 L42 26 Z" fill="url(#laila-body)" stroke="#4A342A" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M72 32 L80 10 L58 26 Z" fill="url(#laila-body)" stroke="#4A342A" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M30 28 L26 16 L38 26 Z" fill="#B8873A" opacity="0.5" />
+      <path d="M70 28 L74 16 L62 26 Z" fill="#B8873A" opacity="0.5" />
+      <circle cx="50" cy="52" r="30" fill="url(#laila-body)" stroke="#4A342A" strokeWidth="2.2" />
+      <path d="M50 40 v24" stroke="#EDE0C8" strokeWidth="10" strokeLinecap="round" opacity="0.6" />
+      <ellipse cx="39" cy="50" rx="4.2" ry="5.5" fill="#4A342A" />
+      <ellipse cx="61" cy="50" rx="4.2" ry="5.5" fill="#4A342A" />
+      <circle cx="40.3" cy="48" r="1.1" fill="#FFFBF3" />
+      <circle cx="62.3" cy="48" r="1.1" fill="#FFFBF3" />
+      <path d="M46 60 L54 60 L50 64 Z" fill="#A8493C" />
+      <path d="M50 64 v3" stroke="#4A342A" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M50 67 q-5 5 -10 1" stroke="#4A342A" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M50 67 q5 5 10 1" stroke="#4A342A" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M18 54 h14 M18 60 h13" stroke="#4A342A" strokeWidth="1.2" opacity="0.55" />
+      <path d="M82 54 h-14 M82 60 h-13" stroke="#4A342A" strokeWidth="1.2" opacity="0.55" />
+    </svg>
+  );
+}
+
+function PranayKitten({ thinking }) {
+  return (
+    <svg viewBox="0 0 100 100" className={`w-full h-full ${thinking ? "pranay-think" : ""}`}>
+      <defs>
+        <linearGradient id="pranay-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#E08A4F" />
+          <stop offset="100%" stopColor="#B85A2A" />
+        </linearGradient>
+      </defs>
+      <path d="M28 32 L18 8 L42 26 Z" fill="url(#pranay-body)" stroke="#3A2A20" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M72 32 L82 8 L58 26 Z" fill="url(#pranay-body)" stroke="#3A2A20" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M28 26 L24 14 L36 25 Z" fill="#3A2A20" opacity="0.35" />
+      <path d="M72 26 L76 14 L64 25 Z" fill="#3A2A20" opacity="0.35" />
+      <circle cx="50" cy="52" r="30" fill="url(#pranay-body)" stroke="#3A2A20" strokeWidth="2.2" />
+      <path d="M38 26 q4 8 0 16 M50 24 v18 M62 26 q-4 8 0 16" stroke="#7A3818" strokeWidth="2.5" strokeLinecap="round" opacity="0.55" fill="none" />
+      <ellipse cx="39" cy="50" rx="4.6" ry="6" fill="#6E8F5C" />
+      <ellipse cx="61" cy="50" rx="4.6" ry="6" fill="#6E8F5C" />
+      <ellipse cx="39" cy="50" rx="2.1" ry="5.2" fill="#2E3B24" />
+      <ellipse cx="61" cy="50" rx="2.1" ry="5.2" fill="#2E3B24" />
+      <circle cx="40.4" cy="47.5" r="1.1" fill="#F3F7EE" />
+      <circle cx="62.4" cy="47.5" r="1.1" fill="#F3F7EE" />
+      <path d="M46 60 L54 60 L50 64 Z" fill="#3A2A20" />
+      <path d="M50 64 v3" stroke="#3A2A20" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M50 67 q-6 6 -11 1" stroke="#3A2A20" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M50 67 q6 6 11 1" stroke="#3A2A20" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M16 53 h15 M16 60 h14" stroke="#3A2A20" strokeWidth="1.2" opacity="0.5" />
+      <path d="M84 53 h-15 M84 60 h-14" stroke="#3A2A20" strokeWidth="1.2" opacity="0.5" />
+      <path d="M33 30 q17 -22 34 0 q3 5 -2 8 h-30 q-5 -3 -2 -8 Z" fill="#FFFBF3" stroke="#3A2A20" strokeWidth="2" strokeLinejoin="round" />
+      <rect x="32" y="36" width="36" height="7" rx="2" fill="#FFFBF3" stroke="#3A2A20" strokeWidth="2" />
+    </svg>
+  );
+}
+
+// ---------- Constants ----------
+
+const CATEGORIES = ["Grains & Staples", "Vegetables", "Fruits", "Dairy & Eggs", "Spices & Condiments", "Proteins", "Other"];
+
+const CATEGORY_COLOR = {
+  "Grains & Staples": "#B8873A",
+  "Vegetables": "#6E8F5C",
+  "Fruits": "#C97A3D",
+  "Dairy & Eggs": "#C9A227",
+  "Spices & Condiments": "#A8493C",
+  "Proteins": "#8A4A3A",
+  "Other": "#7A7263",
+};
+
+const PERISHABLE_CATS = ["Vegetables", "Fruits", "Dairy & Eggs", "Proteins"];
+
+const STARTER_ITEMS = [
+  { name: "Basmati rice", qty: "2 kg", category: "Grains & Staples", threshold: 0.5 },
+  { name: "Toor dal", qty: "500 g", category: "Grains & Staples", threshold: 100 },
+  { name: "Onion", qty: "6", category: "Vegetables", threshold: 2 },
+  { name: "Tomato", qty: "5", category: "Vegetables", threshold: 2 },
+  { name: "Garlic", qty: "1 bulb", category: "Vegetables", threshold: 0 },
+  { name: "Ginger", qty: "small piece", category: "Vegetables", threshold: 0 },
+  { name: "Milk", qty: "1 L", category: "Dairy & Eggs", threshold: 0.25 },
+  { name: "Eggs", qty: "6", category: "Dairy & Eggs", threshold: 2 },
+  { name: "Cumin seeds", qty: "1 jar", category: "Spices & Condiments", threshold: 0 },
+  { name: "Turmeric", qty: "1 jar", category: "Spices & Condiments", threshold: 0 },
+];
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function parseNum(qty) {
+  const match = String(qty).match(/^(\d+(\.\d+)?)/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+function isLowStock(item) {
+  const num = parseNum(item.qty);
+  if (num === null || !item.threshold) return false;
+  return num <= item.threshold;
+}
+
+function daysUntil(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Math.ceil((d.getTime() - Date.now()) / 86400000);
+}
+
+function formatWhen(iso) {
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks === 1) return "last week";
+  if (weeks < 5) return `${weeks} weeks ago`;
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function matchPantryItem(pantry, name) {
+  const n = name.toLowerCase();
+  return (
+    pantry.find((i) => i.name.toLowerCase() === n) ||
+    pantry.find((i) => i.name.toLowerCase().includes(n) || n.includes(i.name.toLowerCase()))
+  );
+}
+
+// Helper: call our own backend, which forwards to Gemini.
+// Pass a text prompt and (optionally) a base64 image to analyze.
+// Gemini is asked to return raw JSON (response_mime_type), so no markdown
+// fence-stripping is needed on the way back.
+async function callGemini(prompt, imageBase64, imageMime) {
+  const parts = [];
+  if (imageBase64) {
+    parts.push({ inline_data: { mime_type: imageMime || "image/jpeg", data: imageBase64 } });
+  }
+  parts.push({ text: prompt });
+
+  const body = {
+    contents: [{ parts }],
+    generationConfig: { response_mime_type: "application/json" },
+  };
+
+  const response = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    console.error("Unexpected Gemini response:", data);
+    throw new Error(data?.error?.message || "No response from Gemini");
+  }
+  return JSON.parse(text);
+}
+
+const VEG_RULE = "STRICT RULE: only vegetarian recipes plus egg dishes are allowed. Never suggest meat, chicken, mutton, fish, prawns, or any other seafood, in any recipe, ever.";
+
+// ---------- Main App ----------
+
+export default function App() {
+  const [pantry, setPantry] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [purring, setPurring] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addQty, setAddQty] = useState("");
+  const [addCategory, setAddCategory] = useState(CATEGORIES[0]);
+  const [addThreshold, setAddThreshold] = useState("");
+  const [addExpiry, setAddExpiry] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingThreshold, setEditingThreshold] = useState(null);
+  const [thresholdDraft, setThresholdDraft] = useState("");
+
+  const [recipes, setRecipes] = useState(null);
+  const [thinking, setThinking] = useState(false);
+  const [error, setError] = useState("");
+  const [craving, setCraving] = useState("");
+
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const [favorites, setFavorites] = useState([]);
+  const [showFavorites, setShowFavorites] = useState(false);
+
+  const [shoppingList, setShoppingList] = useState([]);
+  const [showShoppingList, setShowShoppingList] = useState(false);
+
+  const [deductPrompt, setDeductPrompt] = useState(null);
+
+  const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const fileInputRef = useRef(null);
+
+  const purringTimeout = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await window.storage.get("pantry");
+        setPantry(result?.value ? JSON.parse(result.value) : STARTER_ITEMS.map((i) => ({ ...i, id: uid() })));
+      } catch {
+        setPantry(STARTER_ITEMS.map((i) => ({ ...i, id: uid() })));
+      }
+      try {
+        const h = await window.storage.get("cookHistory");
+        if (h?.value) setHistory(JSON.parse(h.value));
+      } catch {}
+      try {
+        const f = await window.storage.get("favorites");
+        if (f?.value) setFavorites(JSON.parse(f.value));
+      } catch {}
+      try {
+        const s = await window.storage.get("shoppingList");
+        if (s?.value) setShoppingList(JSON.parse(s.value));
+      } catch {}
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    (async () => {
+      try {
+        await window.storage.set("pantry", JSON.stringify(pantry));
+        setPurring(true);
+        clearTimeout(purringTimeout.current);
+        purringTimeout.current = setTimeout(() => setPurring(false), 1200);
+      } catch (e) { console.error(e); }
+    })();
+  }, [pantry, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    window.storage.set("cookHistory", JSON.stringify(history)).catch(console.error);
+  }, [history, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    window.storage.set("favorites", JSON.stringify(favorites)).catch(console.error);
+  }, [favorites, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    window.storage.set("shoppingList", JSON.stringify(shoppingList)).catch(console.error);
+  }, [shoppingList, loaded]);
+
+  function addItem() {
+    if (!addName.trim()) return;
+    const thresholdNum = parseFloat(addThreshold);
+    setPantry((p) => [
+      {
+        id: uid(),
+        name: addName.trim(),
+        qty: addQty.trim() || "some",
+        category: addCategory,
+        threshold: Number.isFinite(thresholdNum) ? thresholdNum : 0,
+        expiresOn: addExpiry || null,
+      },
+      ...p,
+    ]);
+    setAddName(""); setAddQty(""); setAddThreshold(""); setAddExpiry(""); setShowAdd(false);
+  }
+
+  function removeItem(id) {
+    setPantry((p) => p.filter((i) => i.id !== id));
+  }
+
+  function bumpQty(id, dir) {
+    setPantry((p) =>
+      p.map((i) => {
+        if (i.id !== id) return i;
+        const match = i.qty.match(/^(\d+(\.\d+)?)(.*)$/);
+        if (match) {
+          const num = parseFloat(match[1]) + dir;
+          if (num <= 0) return i;
+          return { ...i, qty: `${num % 1 === 0 ? num : num.toFixed(1)}${match[3]}` };
+        }
+        return i;
+      })
+    );
+  }
+
+  function startEditThreshold(item) {
+    setEditingThreshold(item.id);
+    setThresholdDraft(item.threshold ? String(item.threshold) : "");
+  }
+  function saveThreshold(id) {
+    const num = parseFloat(thresholdDraft);
+    setPantry((p) => p.map((i) => (i.id === id ? { ...i, threshold: Number.isFinite(num) && num >= 0 ? num : 0 } : i)));
+    setEditingThreshold(null); setThresholdDraft("");
+  }
+
+  function logCooked(recipe) {
+    setHistory((h) => [
+      { id: uid(), name: recipe.name, description: recipe.description, cookedAt: new Date().toISOString() },
+      ...h,
+    ].slice(0, 50));
+  }
+
+  function deductIngredients(recipe) {
+    setPantry((p) =>
+      p.map((item) => {
+        const used = recipe.usesFromPantry?.some((name) => matchPantryItem(p, name)?.id === item.id);
+        if (!used) return item;
+        const match = item.qty.match(/^(\d+(\.\d+)?)(.*)$/);
+        if (!match) return item;
+        const num = Math.max(0, parseFloat(match[1]) - 1);
+        return { ...item, qty: num === 0 ? `0${match[3]}` : `${num % 1 === 0 ? num : num.toFixed(1)}${match[3]}` };
+      })
+    );
+    setDeductPrompt(null);
+  }
+
+  function toggleFavorite(recipe) {
+    setFavorites((f) => {
+      const exists = f.some((r) => r.name === recipe.name);
+      if (exists) return f.filter((r) => r.name !== recipe.name);
+      return [{ ...recipe, savedAt: new Date().toISOString() }, ...f];
+    });
+  }
+  function isFavorite(recipe) {
+    return favorites.some((r) => r.name === recipe.name);
+  }
+
+  function addToShoppingList(items) {
+    setShoppingList((list) => {
+      const existingNames = new Set(list.map((i) => i.name.toLowerCase()));
+      const fresh = items.filter((n) => !existingNames.has(n.toLowerCase())).map((n) => ({ id: uid(), name: n, done: false }));
+      return [...list, ...fresh];
+    });
+    setShowShoppingList(true);
+  }
+  function toggleShoppingItem(id) {
+    setShoppingList((list) => list.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
+  }
+  function removeShoppingItem(id) {
+    setShoppingList((list) => list.filter((i) => i.id !== id));
+  }
+  function clearCheckedShopping() {
+    setShoppingList((list) => list.filter((i) => !i.done));
+  }
+
+  async function rescaleRecipe(recipe, index, multiplier) {
+    setThinking(true);
+    setError("");
+    const prompt = `You are Pranay, a warm orange tabby chef cat. Rescale this recipe for a different number of servings.
+
+${VEG_RULE}
+
+Original recipe (JSON): ${JSON.stringify(recipe)}
+
+Scale it by a factor of ${multiplier}x (e.g. if original served 2 and multiplier is 2, now serves 4). Adjust ingredient quantities mentioned in usesFromPantry and missing sensibly (add approximate quantities in parentheses if helpful), and adjust step instructions if quantities are mentioned in them.
+
+Respond ONLY with valid JSON, in exactly this shape:
+{
+  "name": "string",
+  "description": "string",
+  "usesFromPantry": ["string", ...],
+  "missing": ["string", ...],
+  "steps": ["string", ...]
+}`;
+    try {
+      const rescaled = await callGemini(prompt);
+      setRecipes((r) => {
+        const copy = { ...r, recipes: [...r.recipes] };
+        copy.recipes[index] = { ...rescaled, servingsMultiplier: (recipe.servingsMultiplier || 1) * multiplier };
+        return copy;
+      });
+    } catch (e) {
+      console.error(e);
+      setError("Pranay fumbled the measuring cups. Try again.");
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoAnalyzing(true);
+    setPhotoError("");
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const mediaType = file.type || "image/jpeg";
+
+      const photoPrompt = `Look at this photo of groceries or ingredients. List every distinct food item you can identify, with a best-guess quantity and a category from exactly this list: ${CATEGORIES.join(", ")}. Respond ONLY with valid JSON, in exactly this shape: {"items": [{"name": "string", "qty": "string", "category": "string"}]}`;
+
+      const parsed = await callGemini(photoPrompt, base64, mediaType);
+      const newItems = (parsed.items || []).map((i) => ({
+        id: uid(),
+        name: i.name,
+        qty: i.qty || "some",
+        category: CATEGORIES.includes(i.category) ? i.category : "Other",
+        threshold: 0,
+        expiresOn: null,
+      }));
+      if (newItems.length === 0) {
+        setPhotoError("Laila couldn't spot anything in that photo — try a clearer shot.");
+      } else {
+        setPantry((p) => [...newItems, ...p]);
+      }
+    } catch (err) {
+      console.error(err);
+      setPhotoError("Laila couldn't read that photo. Try again?");
+    } finally {
+      setPhotoAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function askPranay() {
+    if (pantry.length === 0) {
+      setError("Laila's shelf is empty — add some ingredients first.");
+      return;
+    }
+    setThinking(true);
+    setError("");
+    setRecipes(null);
+
+    const ingredientList = pantry.map((i) => `${i.name} (${i.qty})`).join(", ");
+    const cravingLine = craving.trim()
+      ? `Tammana is specifically in the mood for: "${craving.trim()}". Prioritize this if realistically possible with her ingredients, otherwise get as close as you can.`
+      : "";
+    const recentNames = history.slice(0, 8).map((h) => h.name);
+    const historyLine = recentNames.length
+      ? `She's recently cooked: ${recentNames.join(", ")}. Avoid repeating these exact dishes unless nothing else fits her pantry — variety is welcome.`
+      : "";
+    const lowStockNames = pantry.filter(isLowStock).map((i) => i.name);
+    const lowStockLine = lowStockNames.length
+      ? `Running low on: ${lowStockNames.join(", ")}. Where reasonable, prefer recipes that don't lean heavily on these.`
+      : "";
+    const expiringSoon = pantry.filter((i) => {
+      const d = daysUntil(i.expiresOn);
+      return d !== null && d <= 3;
+    }).map((i) => i.name);
+    const expiryLine = expiringSoon.length
+      ? `These are close to expiring and should be prioritized if possible: ${expiringSoon.join(", ")}.`
+      : "";
+
+    const prompt = `You are Pranay, a warm, encouraging orange tabby chef cat who helps a home cook named Tammana figure out what to cook. She has given you her exact current pantry. Suggest what she can make.
+
+${VEG_RULE}
+
+Pantry: ${ingredientList}
+
+${cravingLine}
+${historyLine}
+${lowStockLine}
+${expiryLine}
+
+Cuisine style: a natural mix of Indian home cooking, including quick "jugaadu" improvised fixes real home cooks make when short on things (e.g. leftover-rice fry-ups, bread-based snacks, single-pot combos), plus Western home cooking where it genuinely fits — whatever actually fits her ingredients best, don't force any one style.
+
+Rules:
+- Only suggest recipes she can realistically make with what's listed (assume she also has basic salt, oil, and water on hand, nothing else).
+- Give exactly 10 to 12 recipe ideas, ranging from fully makeable now to "almost — just needs one or two more things". Aim for real variety: different main ingredients, different cooking styles, different meal types (quick weeknight, weekend project, snack, jugaadu fix, etc) — don't just give minor variations of the same dish.
+- For each recipe include: a name, a one-line description in Pranay's warm/encouraging voice, the ingredients from her pantry it uses, any missing ingredients (empty array if none), and 3-6 short numbered cooking steps.
+- Keep step instructions concise and practical, like real cooking instructions.
+- Assume each recipe as written serves 2 unless the dish implies otherwise.
+
+Respond ONLY with valid JSON, no preamble, in exactly this shape:
+{
+  "pranaySays": "one warm sentence from Pranay introducing the batch of ideas",
+  "recipes": [
+    {
+      "name": "string",
+      "description": "string",
+      "usesFromPantry": ["string", ...],
+      "missing": ["string", ...],
+      "steps": ["string", ...],
+      "readyNow": true
+    }
+  ]
+}`;
+
+    try {
+      const parsed = await callGemini(prompt);
+      parsed.recipes = parsed.recipes.map((r) => ({ ...r, servingsMultiplier: 1 }));
+      setRecipes(parsed);
+    } catch (e) {
+      console.error(e);
+      setError("Pranay got distracted chasing a string. Try again in a moment.");
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  const grouped = CATEGORIES.map((cat) => ({
+    category: cat,
+    items: pantry.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0);
+
+  const expiringItems = pantry.filter((i) => {
+    const d = daysUntil(i.expiresOn);
+    return d !== null && d <= 3;
+  });
+
+  return (
+    <div className="min-h-screen kitchen-bg">
+      <style>{css}</style>
+      <div className="max-w-3xl mx-auto px-5 py-10 md:py-14">
+        <header className="mb-10 text-center">
+          <p className="eyebrow">— tammana's kitchen —</p>
+          <h1 className="hero-title">What's in the house today?</h1>
+          <p className="hero-sub">Laila keeps the shelf. Pranay figures out dinner.</p>
+        </header>
+
+        <section className="panel mb-8">
+          <div className="panel-head">
+            <div className="avatar-wrap"><LailaKitten purring={purring} /></div>
+            <div className="flex-1">
+              <h2 className="panel-title">Laila's shelf</h2>
+              <p className="panel-sub">
+                {pantry.length === 0 ? "Nothing here yet — add the first thing." : `${pantry.length} ${pantry.length === 1 ? "item" : "items"} saved`}
+              </p>
+            </div>
+            <div className="head-actions">
+              <button className="btn-icon" onClick={() => fileInputRef.current?.click()} title="Add ingredients from a photo" disabled={photoAnalyzing}>
+                {photoAnalyzing ? <Loader2 size={16} className="spin" /> : <Camera size={16} strokeWidth={2.2} />}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden-input" onChange={handlePhotoUpload} />
+              <button className="btn-primary" onClick={() => setShowAdd((s) => !s)}>
+                <Plus size={16} strokeWidth={2.5} /> Add
+              </button>
+            </div>
+          </div>
+
+          {photoError && <p className="error-note">{photoError}</p>}
+
+          {showAdd && (
+            <div className="add-row">
+              <input className="field field-name" placeholder="Ingredient, e.g. Paneer" value={addName}
+                onChange={(e) => setAddName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} autoFocus />
+              <input className="field field-qty" placeholder="Qty, e.g. 250 g" value={addQty}
+                onChange={(e) => setAddQty(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} />
+              <select className="field field-cat" value={addCategory} onChange={(e) => setAddCategory(e.target.value)}>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input className="field field-threshold" placeholder="Warn below (optional)" value={addThreshold}
+                onChange={(e) => setAddThreshold(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} inputMode="decimal" />
+              {PERISHABLE_CATS.includes(addCategory) && (
+                <input className="field field-expiry" type="date" value={addExpiry}
+                  onChange={(e) => setAddExpiry(e.target.value)} title="Use by (optional)" />
+              )}
+              <button className="btn-secondary" onClick={addItem}>Save to shelf</button>
+            </div>
+          )}
+
+          {expiringItems.length > 0 && (
+            <div className="expiry-banner">
+              <CalendarClock size={14} strokeWidth={2.5} />
+              <span>Use soon: {expiringItems.map((i) => i.name).join(", ")}.</span>
+            </div>
+          )}
+
+          {(() => {
+            const low = pantry.filter(isLowStock);
+            if (low.length === 0) return null;
+            return (
+              <div className="low-stock-banner">
+                <AlertTriangle size={14} strokeWidth={2.5} />
+                <span>Laila's noticed you're running low on {low.map((i) => i.name).join(", ")}.</span>
+              </div>
+            );
+          })()}
+
+          {grouped.length === 0 ? (
+            <p className="empty-note">Tap "Add" to give Laila something to guard.</p>
+          ) : (
+            <div className="shelf">
+              {grouped.map((g) => (
+                <div key={g.category} className="shelf-group">
+                  <p className="shelf-label" style={{ color: CATEGORY_COLOR[g.category] }}>{g.category}</p>
+                  <div className="chip-row">
+                    {g.items.map((item) => {
+                      const low = isLowStock(item);
+                      const expDays = daysUntil(item.expiresOn);
+                      const expiringSoon = expDays !== null && expDays <= 3;
+                      return (
+                        <div key={item.id} className={`chip ${low ? "chip-low" : ""}`}
+                          style={{ borderColor: low ? "#A8493C" : CATEGORY_COLOR[g.category] + "55" }}>
+                          {low && <AlertTriangle size={11} strokeWidth={2.5} className="chip-low-icon" />}
+                          <span className="chip-name">{item.name}</span>
+                          <div className="chip-controls">
+                            <button onClick={() => bumpQty(item.id, -1)} aria-label={`Reduce ${item.name}`}><Minus size={11} strokeWidth={3} /></button>
+                            <span className="chip-qty">{item.qty}</span>
+                            <button onClick={() => bumpQty(item.id, 1)} aria-label={`Increase ${item.name}`}><Plus size={11} strokeWidth={3} /></button>
+                          </div>
+                          {expiringSoon && (
+                            <span className="chip-expiry" title="Use soon">
+                              <CalendarClock size={11} strokeWidth={2.5} />
+                              {expDays <= 0 ? "today" : `${expDays}d`}
+                            </span>
+                          )}
+                          {editingThreshold === item.id ? (
+                            <div className="threshold-edit">
+                              <input className="threshold-input" value={thresholdDraft}
+                                onChange={(e) => setThresholdDraft(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && saveThreshold(item.id)} placeholder="0" inputMode="decimal" autoFocus />
+                              <button onClick={() => saveThreshold(item.id)} aria-label="Save threshold"><Check size={11} strokeWidth={3} /></button>
+                            </div>
+                          ) : (
+                            <button className="chip-threshold-btn" onClick={() => startEditThreshold(item)} title="Set low-stock warning threshold" aria-label={`Set low stock threshold for ${item.name}`}>
+                              <Settings2 size={11} strokeWidth={2.5} />
+                            </button>
+                          )}
+                          <button className="chip-remove" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.name}`}><X size={12} strokeWidth={2.5} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {shoppingList.length > 0 && (
+          <section className="panel panel-shopping mb-8">
+            <div className="panel-head">
+              <div className="avatar-wrap avatar-wrap-shopping"><ShoppingBag size={22} strokeWidth={1.8} /></div>
+              <div className="flex-1">
+                <h2 className="panel-title">Shopping list</h2>
+                <p className="panel-sub">{shoppingList.filter((i) => !i.done).length} to pick up</p>
+              </div>
+              <button className="btn-ghost" onClick={() => setShowShoppingList((s) => !s)}>{showShoppingList ? "Hide" : "Show"}</button>
+            </div>
+            {showShoppingList && (
+              <div className="shopping-panel">
+                <ul className="shopping-list">
+                  {shoppingList.map((item) => (
+                    <li key={item.id} className={item.done ? "shopping-done" : ""}>
+                      <button className="shopping-check" onClick={() => toggleShoppingItem(item.id)} aria-label={`Toggle ${item.name}`}>
+                        {item.done && <Check size={11} strokeWidth={3} />}
+                      </button>
+                      <span className="shopping-name">{item.name}</span>
+                      <button className="chip-remove" onClick={() => removeShoppingItem(item.id)} aria-label={`Remove ${item.name}`}><X size={12} strokeWidth={2.5} /></button>
+                    </li>
+                  ))}
+                </ul>
+                {shoppingList.some((i) => i.done) && (
+                  <button className="btn-ghost" onClick={clearCheckedShopping} style={{ marginTop: 10 }}>
+                    <Trash2 size={13} strokeWidth={2.2} /> Clear checked
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="panel panel-pranay">
+          <div className="panel-head">
+            <div className="avatar-wrap avatar-wrap-pranay"><PranayKitten thinking={thinking} /></div>
+            <div className="flex-1">
+              <h2 className="panel-title">Ask Pranay</h2>
+              <p className="panel-tagline">your personal chef, even when I'm not there</p>
+            </div>
+            <div className="head-actions">
+              <button className="btn-ghost" onClick={() => setShowFavorites((s) => !s)}>
+                <Star size={14} strokeWidth={2.2} />
+                {showFavorites ? "Hide" : `Saved${favorites.length ? ` (${favorites.length})` : ""}`}
+              </button>
+              <button className="btn-ghost" onClick={() => setShowHistory((s) => !s)}>
+                <History size={14} strokeWidth={2.2} /> {showHistory ? "Hide log" : "Cook log"}
+              </button>
+            </div>
+          </div>
+
+          {showFavorites && (
+            <div className="history-panel">
+              {favorites.length === 0 ? (
+                <p className="empty-note">No saved recipes yet — tap the star on any recipe to keep it here.</p>
+              ) : (
+                <div className="recipe-grid">
+                  {favorites.map((r, idx) => (
+                    <RecipeCard key={r.name + idx} recipe={r} isFav onToggleFav={() => toggleFavorite(r)}
+                      onCooked={() => logCooked(r)} onRequestDeduct={() => setDeductPrompt(r)}
+                      onAddMissingToList={() => addToShoppingList(r.missing || [])} onRescale={null} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {showHistory && (
+            <div className="history-panel">
+              {history.length === 0 ? (
+                <p className="empty-note">Nothing logged yet — mark a recipe as cooked and Pranay will remember it.</p>
+              ) : (
+                <ul className="history-list">
+                  {history.map((h) => (
+                    <li key={h.id}><span className="history-name">{h.name}</span><span className="history-when">{formatWhen(h.cookedAt)}</span></li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div className="ask-row">
+            <input className="field field-craving" placeholder="In the mood for something specific? (optional)" value={craving}
+              onChange={(e) => setCraving(e.target.value)} onKeyDown={(e) => e.key === "Enter" && askPranay()} />
+            <button className="btn-primary btn-ask" onClick={askPranay} disabled={thinking}>
+              {thinking ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+              {thinking ? "Thinking..." : "What can I make?"}
+            </button>
+          </div>
+
+          {error && <p className="error-note">{error}</p>}
+
+          {recipes && (
+            <div className="results">
+              <p className="pranay-says">"{recipes.pranaySays}"</p>
+              <div className="recipe-grid">
+                {recipes.recipes.map((r, idx) => (
+                  <RecipeCard key={idx} recipe={r} isFav={isFavorite(r)} onToggleFav={() => toggleFavorite(r)}
+                    onCooked={() => { logCooked(r); setDeductPrompt(r); }}
+                    onRequestDeduct={() => setDeductPrompt(r)}
+                    onAddMissingToList={() => addToShoppingList(r.missing || [])}
+                    onRescale={(mult) => rescaleRecipe(r, idx, mult)} />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <footer className="footer-note">Saved privately for Tammana. Laila never forgets.</footer>
+      </div>
+
+      {deductPrompt && (
+        <div className="modal-backdrop" onClick={() => setDeductPrompt(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Update the shelf?</h3>
+            <p className="modal-body">Should Laila subtract what "{deductPrompt.name}" used from your pantry?</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => deductIngredients(deductPrompt)}>Yes, update it</button>
+              <button className="btn-ghost" onClick={() => setDeductPrompt(null)}>Not now</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecipeCard({ recipe, isFav, onToggleFav, onCooked, onRequestDeduct, onAddMissingToList, onRescale }) {
+  const [open, setOpen] = useState(false);
+  const [cooked, setCooked] = useState(false);
+  const ready = recipe.missing?.length === 0;
+  const multiplier = recipe.servingsMultiplier || 1;
+  const baseServings = 2;
+
+  function handleCooked() {
+    setCooked(true);
+    onCooked?.();
+  }
+
+  return (
+    <div className={`recipe-card ${ready ? "recipe-ready" : ""}`}>
+      <div className="recipe-card-top">
+        <ChefHat size={16} strokeWidth={2} className="recipe-icon" />
+        <div className="recipe-card-top-right">
+          <span className={`recipe-badge ${ready ? "badge-ready" : "badge-almost"}`}>{ready ? "Ready now" : "Almost there"}</span>
+          <button className={`fav-btn ${isFav ? "fav-btn-active" : ""}`} onClick={onToggleFav} aria-label={isFav ? "Remove from saved" : "Save recipe"}>
+            <Star size={15} strokeWidth={2} fill={isFav ? "currentColor" : "none"} />
+          </button>
+        </div>
+      </div>
+      <h3 className="recipe-name">{recipe.name}</h3>
+      <p className="recipe-desc">{recipe.description}</p>
+
+      {recipe.missing?.length > 0 && (
+        <div className="recipe-missing-row">
+          <p className="recipe-missing">Needs: {recipe.missing.join(", ")}</p>
+          {onAddMissingToList && (
+            <button className="recipe-list-btn" onClick={onAddMissingToList} title="Add to shopping list">
+              <ShoppingBag size={12} strokeWidth={2.2} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {onRescale && (
+        <div className="servings-row">
+          <Users size={13} strokeWidth={2.2} />
+          <span className="servings-label">Serves {baseServings * multiplier}</span>
+          <button className="servings-btn" onClick={() => onRescale(2)} title="Double it">×2</button>
+          <button className="servings-btn" onClick={() => onRescale(0.5)} title="Halve it">÷2</button>
+        </div>
+      )}
+
+      <div className="recipe-actions">
+        <button className="recipe-toggle" onClick={() => setOpen((o) => !o)}>{open ? "Hide steps" : "Show steps"}</button>
+        <button className={`recipe-cooked-btn ${cooked ? "recipe-cooked-done" : ""}`} onClick={handleCooked} disabled={cooked}>
+          {cooked ? <><Check size={12} strokeWidth={3} /> Logged</> : "Mark as cooked"}
+        </button>
+      </div>
+
+      {open && (
+        <ol className="recipe-steps">
+          {recipe.steps.map((s, i) => <li key={i}>{s}</li>)}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+const css = `
+.kitchen-bg {
+  background:
+    radial-gradient(circle at 10% 6%, #F2E3CC 0%, transparent 45%),
+    radial-gradient(circle at 90% 94%, #EDE0C4 0%, transparent 50%),
+    #F7EDE0;
+  font-family: 'Georgia', 'Iowan Old Style', serif;
+  color: #3A2A20;
+  min-height: 100vh;
+}
+.eyebrow { font-family: 'Georgia', serif; font-style: italic; font-size: 13px; letter-spacing: 0.08em; color: #A8493C; font-weight: 600; margin: 0 0 10px; }
+.hero-title { font-size: clamp(28px, 5vw, 42px); line-height: 1.15; margin: 0 0 10px; font-weight: 600; color: #3A2A20; }
+.hero-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 15px; color: #8A7A63; margin: 0; }
+.max-w-3xl { max-width: 768px; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.px-5 { padding-left: 20px; padding-right: 20px; }
+.py-10 { padding-top: 40px; padding-bottom: 40px; }
+.mb-10 { margin-bottom: 40px; }
+.mb-8 { margin-bottom: 32px; }
+.text-center { text-align: center; }
+.flex-1 { flex: 1; }
+.min-h-screen { min-height: 100vh; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+@media (min-width: 768px) { .md\\:py-14 { padding-top: 56px; padding-bottom: 56px; } }
+
+.panel { background: #FFFBF3; border: 1px solid #E6D6B8; border-radius: 18px; padding: 22px; box-shadow: 0 1px 2px rgba(58,42,32,0.05), 0 10px 26px rgba(58,42,32,0.06); position: relative; }
+.panel::before { content: ""; position: absolute; top: 0; left: 20px; right: 20px; height: 3px; background: repeating-linear-gradient(90deg, #B8873A 0 10px, transparent 10px 20px); opacity: 0.55; border-radius: 0 0 3px 3px; }
+.panel-pranay { background: linear-gradient(180deg, #FFFBF3 0%, #FBF3E4 100%); border-color: #E3CFA3; }
+.panel-shopping { background: linear-gradient(180deg, #FFFBF3 0%, #F6EEDC 100%); border-color: #E3CFA3; }
+.panel-head { display: flex; align-items: center; gap: 14px; }
+.head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.avatar-wrap { width: 56px; height: 56px; flex-shrink: 0; border-radius: 50%; background: #F1E7D4; border: 1.5px solid #E6D6B8; padding: 4px; }
+.avatar-wrap-pranay { background: #F7E2CE; border-color: #E3B586; }
+.avatar-wrap-shopping { background: #EFE4C9; border-color: #E3CFA3; color: #A8493C; display: flex; align-items: center; justify-content: center; }
+.panel-title { font-family: system-ui, -apple-system, sans-serif; font-size: 16px; font-weight: 700; margin: 0 0 2px; color: #3A2A20; }
+.panel-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #937F5E; margin: 0; }
+.panel-tagline { font-family: 'Georgia', serif; font-style: italic; font-size: 13.5px; color: #6E8F5C; margin: 0; }
+.btn-primary { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; gap: 6px; background: #A8493C; color: #FFFBF3; border: none; padding: 10px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; white-space: nowrap; }
+.btn-primary:hover { background: #8F3B2F; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.65; cursor: default; transform: none; }
+.btn-icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #F1E7D4; border: 1.5px solid #E6D6B8; color: #4A342A; cursor: pointer; flex-shrink: 0; }
+.btn-icon:hover { background: #E6D6B8; }
+.btn-icon:disabled { opacity: 0.6; cursor: default; }
+.hidden-input { display: none; }
+.btn-secondary { font-family: system-ui, -apple-system, sans-serif; background: #4A342A; color: #FFFBF3; border: none; padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.add-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed #E0CDA0; }
+.field { font-family: system-ui, -apple-system, sans-serif; border: 1.5px solid #E6D6B8; background: #FFFBF3; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; color: #3A2A20; outline: none; }
+.field:focus { border-color: #A8493C; }
+.field-name { flex: 2; min-width: 140px; }
+.field-qty { flex: 1; min-width: 90px; }
+.field-cat { flex: 1.4; min-width: 140px; }
+.field-threshold { flex: 1; min-width: 130px; }
+.field-expiry { flex: 1; min-width: 130px; }
+.field-craving { flex: 1; min-width: 200px; }
+.empty-note, .error-note { font-family: system-ui, -apple-system, sans-serif; font-size: 13.5px; color: #937F5E; margin-top: 16px; }
+.error-note { color: #8F3B2F; }
+.shelf { margin-top: 18px; display: flex; flex-direction: column; gap: 16px; }
+.shelf-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: flex; align-items: center; gap: 8px; background: #FFFBF3; border: 1.5px solid; border-radius: 999px; padding: 6px 8px 6px 14px; font-family: system-ui, -apple-system, sans-serif; }
+.chip-name { font-size: 13px; font-weight: 600; color: #3A2A20; }
+.chip-controls { display: flex; align-items: center; gap: 5px; background: #F1E7D4; border-radius: 999px; padding: 3px 6px; }
+.chip-controls button { width: 18px; height: 18px; border-radius: 50%; border: none; background: #FFFBF3; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #4A342A; }
+.chip-qty { font-size: 11.5px; color: #8A7A63; min-width: 34px; text-align: center; }
+.chip-remove { border: none; background: none; cursor: pointer; color: #C4B79A; display: flex; padding: 2px; }
+.chip-remove:hover { color: #A8493C; }
+.chip-expiry { display: flex; align-items: center; gap: 3px; font-size: 10.5px; color: #A8493C; background: #F6E2D8; border-radius: 999px; padding: 2px 7px; font-weight: 600; }
+.chip-low { background: #FBF1E8; }
+.chip-low-icon { color: #A8493C; margin-left: 2px; }
+.chip-threshold-btn { border: none; background: none; cursor: pointer; color: #C4B79A; display: flex; padding: 2px; }
+.chip-threshold-btn:hover { color: #4A342A; }
+.threshold-edit { display: flex; align-items: center; gap: 4px; background: #F1E7D4; border-radius: 999px; padding: 3px 6px; }
+.threshold-input { width: 36px; border: none; background: none; outline: none; font-family: system-ui, -apple-system, sans-serif; font-size: 11.5px; color: #3A2A20; }
+.threshold-edit button { width: 16px; height: 16px; border-radius: 50%; border: none; background: #A8493C; color: #FFFBF3; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+.low-stock-banner, .expiry-banner { display: flex; align-items: center; gap: 8px; background: #F6E9D8; color: #8A5A20; border: 1px solid #E3C793; border-radius: 10px; padding: 9px 12px; font-family: system-ui, -apple-system, sans-serif; font-size: 12.5px; margin-top: 14px; }
+.expiry-banner { background: #F1EADA; color: #5B6E42; border-color: #C9CFA0; }
+.btn-ghost { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; gap: 6px; background: none; border: 1.5px solid #E3B586; color: #8A4A1E; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-ghost:hover { background: #F7E2CE; }
+.history-panel { margin-top: 16px; padding: 14px; background: #FBF3E4; border: 1px solid #E3CFA3; border-radius: 12px; }
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.history-list li { display: flex; justify-content: space-between; align-items: baseline; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; }
+.history-name { color: #3A2A20; font-weight: 600; }
+.history-when { color: #937F5E; font-size: 11.5px; }
+.shopping-panel { margin-top: 16px; }
+.shopping-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.shopping-list li { display: flex; align-items: center; gap: 10px; font-family: system-ui, -apple-system, sans-serif; font-size: 13.5px; }
+.shopping-check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #C4A876; background: #FFFBF3; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #A8493C; flex-shrink: 0; }
+.shopping-name { flex: 1; color: #3A2A20; }
+.shopping-done .shopping-name { text-decoration: line-through; color: #B5A788; }
+.shopping-done .shopping-check { background: #E3EDD9; border-color: #B9CBA9; }
+.ask-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.btn-ask { flex-shrink: 0; }
+.pranay-says { font-style: italic; color: #6E5030; font-size: 15px; margin: 18px 2px 16px; }
+.recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.recipe-card { background: #FFFBF3; border: 1.5px solid #E3CFA3; border-radius: 14px; padding: 14px; }
+.recipe-ready { border-color: #B9CBA9; }
+.recipe-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.recipe-card-top-right { display: flex; align-items: center; gap: 8px; }
+.recipe-icon { color: #A8493C; }
+.recipe-badge { font-family: system-ui, -apple-system, sans-serif; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 999px; }
+.badge-ready { background: #E3EDD9; color: #3A5A2E; }
+.badge-almost { background: #F6E6D2; color: #8A5A20; }
+.fav-btn { border: none; background: none; cursor: pointer; color: #C4B79A; display: flex; padding: 0; }
+.fav-btn-active { color: #C9A227; }
+.recipe-name { font-size: 16px; font-weight: 700; margin: 0 0 6px; color: #3A2A20; }
+.recipe-desc { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #8A7A63; margin: 0 0 8px; line-height: 1.45; }
+.recipe-missing-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.recipe-missing { font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #A8672A; margin: 0; }
+.recipe-list-btn { border: none; background: #F6E9D8; color: #8A5A20; border-radius: 6px; padding: 4px 6px; display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+.recipe-list-btn:hover { background: #EFDBB8; }
+.servings-row { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #6E5030; }
+.servings-label { flex: 1; }
+.servings-btn { border: 1px solid #E3CFA3; background: #FBF3E4; color: #6E5030; border-radius: 6px; font-size: 11px; font-weight: 700; padding: 3px 7px; cursor: pointer; }
+.servings-btn:hover { background: #F1E0BE; }
+.recipe-toggle { font-family: system-ui, -apple-system, sans-serif; background: none; border: none; color: #A8493C; font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 0; }
+.recipe-steps { font-family: system-ui, -apple-system, sans-serif; font-size: 12.5px; color: #4A4030; margin: 10px 0 0; padding-left: 18px; line-height: 1.6; }
+.recipe-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.recipe-cooked-btn { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; gap: 4px; background: #EEE4CE; color: #4A4030; border: none; font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+.recipe-cooked-btn:hover { background: #E3EDD9; }
+.recipe-cooked-done { background: #E3EDD9; color: #3A5A2E; cursor: default; }
+.footer-note { text-align: center; font-family: system-ui, -apple-system, sans-serif; font-size: 12px; color: #C4B79A; margin-top: 24px; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(58,42,32,0.35); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.modal { background: #FFFBF3; border-radius: 16px; padding: 22px; max-width: 340px; width: 100%; border: 1px solid #E6D6B8; }
+.modal-title { font-size: 17px; font-weight: 700; margin: 0 0 8px; color: #3A2A20; }
+.modal-body { font-family: system-ui, -apple-system, sans-serif; font-size: 13.5px; color: #6E5030; margin: 0 0 16px; line-height: 1.5; }
+.modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.laila-purr { animation: purr 1.2s ease-in-out; }
+@keyframes purr { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+.pranay-think { animation: think 0.9s ease-in-out infinite; }
+@keyframes think { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { .laila-purr, .pranay-think, .spin { animation: none; } }
+`;
+
+createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
