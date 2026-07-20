@@ -1,0 +1,17 @@
+{
+  "name": "tammanas-kitchen",
+  "version": "1.0.0",
+  "description": "Tammana's Kitchen — pantry tracker with Gemini-powered recipes (Laila & Pranay)",
+  "private": true,
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
